@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Summary Outputs</title>
+    <style>
+        body {
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f9f9f9;
+            color: #333;
+            margin: 20px;
+        }
+        h1 {
+            color: #222;
+        }
+        table {
+            width: 60%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: #fff;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #f1f1f1;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        tr.total-row {
+            font-weight: bold;
+            border-top: 2px solid #555;
+            background-color: #fafafa;
+        }
+        .controls {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            background-color: #fff;
+            display: inline-block;
+            border-radius: 5px;
+        }
+        input[type="number"] {
+            padding: 6px;
+            width: 80px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            padding: 8px 14px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        p {
+            background-color: #fff;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            width: fit-content;
+        }
+        form {
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Summary for {{ investor }}  {{ totals['total_portfolio'] }} ZAR Portfolio</h1>
+
+    <p>
+        <strong>Total Due:</strong> {{ totals['total_due'] }}<br>
+        <strong>Total Paid:</strong> {{ totals['total_paid'] }}<br>
+        <strong>Total Due {{ "20" + report_date[2:4] + "-" + report_date[4:6] + "-" + report_date[6:] }}:</strong> {{ totals['total_due_on_date'] }}<br>
+        <strong>Total Unrepaid Receivables:</strong> {{ totals['total_portfolio'] }}
+    </p>
+
+    <div class="controls">
+        <form method="POST" action="/summary">
+            <!-- carry over the GET‐loaded report_date -->
+            <input type="hidden" name="investor" value="{{ investor }}">
+            <input type="hidden" name="report_date" value="{{ report_date }}">
+            <label for="dpd_threshold">Repurchase DPD Threshold:</label>
+            <input type="number"
+                   name="dpd_threshold"
+                   id="dpd_threshold"
+                   value="{{ dpd_threshold }}"
+                   min="0">
+            <button type="submit">Apply Threshold</button>
+        </form>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Bucket</th>
+                <th>Value (ZAR)</th>
+                <th>% of Portfolio</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in summary %}
+            <tr class="{% if row.Bucket == 'Total' %}total-row{% endif %}">
+                <td>{{ row.Bucket }}</td>
+                <td>{{ row.Value }}</td>
+                <td>{{ row['Percentage of Total'] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <br>
+
+    <form method="POST" action="/finalise-repurchases">
+        <input type="hidden" name="investor" value="{{ investor }}">
+        <input type="hidden" name="dpd_threshold" value="{{ dpd_threshold }}">
+        <input type="hidden" name="report_date" value="{{ report_date }}">
+        <button type="submit">✅ Finalise Repurchases</button>
+    </form>
+</body>
+</html>

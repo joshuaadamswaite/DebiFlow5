@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Repurchase Finalisation Summary</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f9f9f9;
+      margin: 0;
+      padding: 2em;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h2, h3 {
+      color: #333;
+      text-align: center;
+      margin: 0 0 1em;
+    }
+    .summary-box {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 1.5em;
+      width: 100%;
+      max-width: 600px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      margin-bottom: 2em;
+      box-sizing: border-box;
+    }
+    .summary-box p {
+      margin: 0.5em 0;
+    }
+    table {
+      width: 100%;
+      max-width: 600px;
+      border-collapse: collapse;
+      margin-bottom: 2em;
+    }
+    th, td {
+      padding: 0.75em 1em;
+      border: 1px solid #ccc;
+      text-align: left;
+    }
+    th {
+      background: #f5f5f5;
+    }
+
+    /* —— GRID LAYOUT FOR BUTTONS —— */
+    .button-container {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1em;
+      width: 100%;
+      max-width: 600px;
+      margin-top: 1em;
+    }
+
+    /* Unified button style */
+    .button-container button,
+    .button-container a {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 60px;            /* exact height */
+      padding: 0 20px;         /* horizontal padding only */
+      font-size: 15px;
+      background-color: #28a745;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background-color 0.2s ease;
+      box-sizing: border-box;
+    }
+    .button-container button:hover,
+    .button-container a:hover {
+      background-color: #218838;
+    }
+    /* Disabled / loading state */
+    .button-container button:disabled {
+      background-color: #6c757d;
+      cursor: wait;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>✅ Repurchase Finalisation Summary</h2>
+
+  <div class="summary-box">
+    <p><strong>Reporting Date:</strong> {{ report_date }}</p>
+    <p><strong>Finalisation Timestamp:</strong> {{ timestamp }}</p>
+  </div>
+
+  <h3>Totals</h3>
+  <table>
+    <tr><th>Description</th><th>Amount (ZAR)</th></tr>
+    <tr><td><strong>Total Due</strong></td><td>{{ "{:,.2f}".format(total_due) }}</td></tr>
+    <tr><td><strong>Total Repaid</strong></td><td>{{ "{:,.2f}".format(total_repaid) }}</td></tr>
+    <tr><td><strong>Total Repurchased</strong></td><td>{{ "{:,.2f}".format(total_repurchased) }}</td></tr>
+  </table>
+
+  <h3>Repurchased Accounts Summary</h3>
+  <table>
+    <tr><th>Metric</th><th>Value</th></tr>
+    <tr><td># of Accounts Repurchased</td><td>{{ num_repurchased }}</td></tr>
+    <tr><td>Total Repurchased Amount</td><td>{{ "{:,.2f}".format(total_repurchased) }}</td></tr>
+  </table>
+
+  <div class="button-container">
+    <button id="download-confirm-btn">
+      📄 Download Confirmation PDF
+    </button>
+    <button id="download-masters-btn">
+      📦 Download All Master Files
+    </button>
+    <button id="download-allocations-btn">
+      🗂️ Download Allocation Files
+    </button>
+    <a href="{{ url_for('upload_routes', investor=investor) }}">
+      🔗 Return to Upload
+    </a>
+  </div>
+
+  <script>
+    // Helper to perform fetch + download via blob
+    async function fetchAndDownload(url, btn, originalText) {
+      btn.disabled = true;
+      btn.textContent = '⏳ Downloading…';
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(res.statusText);
+        const blob = await res.blob();
+        const href = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = href;
+        a.download = '';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(href);
+      } catch (err) {
+        console.error(err);
+        alert('Download failed. Please try again.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    }
+
+    // Wire up each button
+    document.getElementById('download-confirm-btn').addEventListener('click', function(){
+      const original = this.textContent;
+      const url = "{{ url_for('download_confirmation_route') }}?report_date={{ report_date }}&investor={{ investor }}";
+      fetchAndDownload(url, this, original);
+    });
+    document.getElementById('download-masters-btn').addEventListener('click', function(){
+      const original = this.textContent;
+      const url = "{{ url_for('download_all_masters') }}?report_date={{ report_date }}&investor={{ investor }}";
+      fetchAndDownload(url, this, original);
+    });
+    document.getElementById('download-allocations-btn').addEventListener('click', function(){
+      const original = this.textContent;
+      const url = "{{ url_for('download_allocations') }}?report_date={{ report_date }}&investor={{ investor }}";
+      fetchAndDownload(url, this, original);
+    });
+  </script>
+
+</body>
+</html>

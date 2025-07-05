@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DebiFlow File Upload</title>
+    <style>
+        body {
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f9f9f9;
+            color: #333;
+            margin: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h2, h3 {
+            color: #222;
+            text-align: center;
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+        .messages {
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 15px 20px;
+            margin-bottom: 30px;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 500px;
+            box-sizing: border-box;
+        }
+        .messages p {
+            margin: 0;
+        }
+        .upload-box,
+        .available-dates {
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 500px;
+            box-sizing: border-box;
+            margin-bottom: 30px;
+        }
+        .upload-box form {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        input[type="file"] {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 100%;
+            max-width: 360px;
+            box-sizing: border-box;
+        }
+        input[type="submit"] {
+            margin-top: 20px;
+            width: 120px;
+            height: 44px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 15px;
+            transition: background-color 0.2s ease;
+        }
+        input[type="submit"]:hover {
+            background-color: #45a049;
+        }
+
+        /* CENTERING AVAILABLE-DATES CONTENT */
+        .available-dates {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .available-dates ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            width: 100%;
+        }
+        .available-dates li {
+            margin-bottom: 12px;
+            text-align: center;
+        }
+        .date-button {
+            width: 70%;
+            max-width: 300px;
+            height: 44px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 15px;
+            transition: background-color 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            white-space: nowrap;
+            margin: 0 auto;
+        }
+        .date-button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h2>📤 Upload Weekly Files to DebiFlow</h2>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="messages">
+          {% for message in messages %}
+            <p>{{ message }}</p>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% if errors %}
+    <div class="alert alert-danger">
+        <strong>Details:</strong>
+        <ul>
+        {% for error in errors %}
+        <li>{{ error }}</li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+
+    <div class="upload-box">
+        <form method="POST" enctype="multipart/form-data">
+            <!-- Include investor in POST -->
+            <input type="hidden" name="investor" value="{{ investor }}">
+            <!-- allow multiple CSVs -->
+            <input
+                type="file"
+                name="files[]"
+                accept=".csv"
+                multiple
+                required
+            >
+            <input type="submit" value="Upload All">
+        </form>
+    </div>
+
+
+    <div class="available-dates">
+        <h3>✅ Available Reporting Periods Ready for Confirmation:</h3>
+        {% if available_dates %}
+            <ul>
+              {% for date in available_dates %}
+            <li>
+            <form method="POST" action="{{ url_for('pending_confirmations', investor=investor) }}">
+                <input type="hidden" name="investor" value="{{ investor }}">
+                <input type="hidden" name="report_date" value="{{ date }}">
+                <button type="submit" class="date-button">
+                Confirm: {{ date }}
+                </button>
+            </form>
+            </li>
+
+              {% endfor %}
+            </ul>
+        {% else %}
+            <p>⏳ No complete sets of files detected yet.</p>
+        {% endif %}
+    </div>
+</body>
+</html>

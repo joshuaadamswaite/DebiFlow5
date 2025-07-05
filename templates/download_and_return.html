@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Download Confirmation</title>
+    <meta http-equiv="refresh" content="5;url={{ url_for('payment_summary_route', report_date=report_date, investor=investor) }}">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 2em;
+            background: #f9f9f9;
+            color: #333;
+        }
+        .container {
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 2em;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .container p {
+            margin: 1em 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Preparing your download...</h2>
+        <p>Your confirmation PDF will download automatically.</p>
+        <p>You will be returned to the Payment Summary shortly.</p>
+        <p>If not, <a href="{{ url_for('payment_summary_route', report_date=report_date, investor=investor) }}">click here</a>.</p>
+    </div>
+
+    <script>
+        // Automatically start the download
+        window.onload = function() {
+            const link = document.createElement("a");
+            link.href = "{{ url_for('download_confirmation_route', report_date=report_date, investor=investor) }}";
+            link.download = "";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
