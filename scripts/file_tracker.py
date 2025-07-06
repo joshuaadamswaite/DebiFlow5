@@ -7,7 +7,7 @@ import os
 REQUIRED_PREFIXES = ["Payments_", "Schedule_", "CustomerDetails_", "HP_Repayments_"]
 RAW_FOLDER       = "raw/"
 MASTER_FOLDER    = "master/"
-DEFAULT_BUCKET   = "debiflow-staging"
+DEFAULT_BUCKET   = os.getenv("GCS_BUCKET", "debiflow-staging")
 
 def get_reporting_dates(bucket_name: str = DEFAULT_BUCKET,
                         reference_date: str = None,

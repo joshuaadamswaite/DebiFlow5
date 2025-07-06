@@ -1,7 +1,8 @@
 import sys
+import os
 from google.cloud import storage
 
-BUCKET_NAME = "debiflow-staging"
+BUCKET_NAME = os.getenv("GCS_BUCKET", "debiflow-staging")
 
 def list_uploaded_files(investor):
     prefix = f"raw/{investor}/"

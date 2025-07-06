@@ -1,7 +1,8 @@
 import sys
+import os
 from google.cloud import storage
 
-def list_master_blobs(investor, bucket_name="debiflow-staging"):
+def list_master_blobs(investor, bucket_name=os.getenv("GCS_BUCKET", "debiflow-staging")):
     prefix = f"master/{investor}/"
     client = storage.Client()
     bucket = client.bucket(bucket_name)

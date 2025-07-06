@@ -15,6 +15,8 @@ ENV FLASK_APP=main.py
 ENV FLASK_RUN_HOST=0.0.0.0
 ENV FLASK_RUN_PORT=8080
 ENV PYTHONUNBUFFERED=1
+# Default bucket; override at runtime if needed
+ENV GCS_BUCKET=debiflow-staging
 
 # Expose the port for Cloud Run
 EXPOSE 8080

@@ -26,7 +26,7 @@ from scripts.utils import build_investor_path, require_investor
 
 # Config
 ALLOWED_PREFIXES = ['HP_Repayments_', 'CustomerDetails_', 'Schedule_', 'Payments_']
-GCS_BUCKET = "debiflow-staging"#<<<<<<<<<<This is where you can change the bucket
+GCS_BUCKET = os.getenv("GCS_BUCKET", "debiflow-staging")
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)

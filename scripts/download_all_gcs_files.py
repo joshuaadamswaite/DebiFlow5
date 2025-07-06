@@ -2,7 +2,7 @@ import os
 import sys
 from scripts.debiflow_gcs import DebiFlowGCS
 
-BUCKET_NAME = "debiflow-staging"
+BUCKET_NAME = os.getenv("GCS_BUCKET", "debiflow-staging")
 DOWNLOAD_FOLDER = "downloads"
 FILE_TYPES = ["Schedule", "Payments", "CustomerDetails", "HP_Repayments"]
 
