@@ -1,5 +1,8 @@
 import os
-from flask import Flask, render_template, request, redirect, flash, session
+from flask import Flask, render_template, request, redirect, flash, session, g, url_for
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+from models import db, User, Company
 from google.cloud import storage
 from datetime import datetime
 from scripts.file_tracker import get_reporting_dates
@@ -12,7 +15,6 @@ import scripts.output_generators  # This is your script with the function
 
 from scripts.payment_summary import payment_summary
 from scripts.download_confirmation import download_confirmation
-from flask import url_for
 
 from scripts.utilisation_request import generate_utilisation_request
 
@@ -20,7 +22,7 @@ from io import StringIO
 import pandas as pd
 from scripts.validate_uploads import validate_file
 
-from flask import send_file, request, redirect, flash
+from flask import send_file
 
 from scripts.utils import build_investor_path, require_investor
 
@@ -30,33 +32,77 @@ GCS_BUCKET = os.getenv("GCS_BUCKET", "debiflow-staging")
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
+app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:///app.db")
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+db.init_app(app)
+
+login_manager = LoginManager()
+login_manager.login_view = "login"
+login_manager.init_app(app)
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
 
 def allowed_file(filename):
     return filename.endswith('.csv') and any(filename.startswith(prefix) for prefix in ALLOWED_PREFIXES)
 
 
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        company_name = request.form['company']
+        bucket_name = request.form['bucket_name']
+
+        if User.query.filter_by(username=username).first():
+            flash('User already exists.')
+            return redirect(url_for('signup'))
+
+        company = Company.query.filter_by(name=company_name).first()
+        if not company:
+            company = Company(name=company_name, bucket_name=bucket_name)
+            db.session.add(company)
+
+        user = User(username=username, password_hash=generate_password_hash(password))
+        user.companies.append(company)
+        db.session.add(user)
+        db.session.commit()
+        login_user(user)
+        return redirect(url_for('landing_page'))
+    return render_template('signup.html')
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        user = User.query.filter_by(username=username).first()
+        if user and check_password_hash(user.password_hash, password):
+            login_user(user)
+            return redirect(url_for('landing_page'))
+        flash('Invalid credentials')
+    return render_template('login.html')
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
 @app.route("/", methods=["GET"])
+@login_required
 def landing_page():
-    from google.cloud import storage
-
-    client = storage.Client()
-    bucket = client.bucket(GCS_BUCKET)
-
-    # List all folders under Investors/
-    iterator = bucket.list_blobs(prefix="Investors/", delimiter="/")
-    prefixes = set()
-
-    # This forces iteration and fills prefixes
-    for page in iterator.pages:
-        prefixes.update(page.prefixes)
-
-    # Clean investor names (remove "Investors/" and trailing "/")
-    investors = [p.replace("Investors/", "").strip("/") for p in sorted(prefixes)]
-
+    investors = [c.name for c in current_user.companies]
     return render_template("landing.html", investors=investors)
 
 
 @app.route("/upload", methods=["GET", "POST"])
+@login_required
 @require_investor
 def upload_routes(investor):
     from google.cloud import storage
@@ -66,7 +112,7 @@ def upload_routes(investor):
     import pandas as pd
 
     client = storage.Client()
-    bucket = client.bucket(GCS_BUCKET)
+    bucket = client.bucket(g.company_bucket or GCS_BUCKET)
 
     if request.method == "POST":
         files = request.files.getlist("files[]")
@@ -166,6 +212,7 @@ def upload_routes(investor):
 
 
 @app.route("/pending", methods=["POST"])
+@login_required
 @require_investor
 def pending_confirmations(investor):
     from datetime import datetime
@@ -205,6 +252,7 @@ def pending_confirmations(investor):
 
 
 @app.route("/confirm", methods=["POST"])
+@login_required
 @require_investor
 def confirm_and_merge(investor):
     import pandas as pd
@@ -229,7 +277,7 @@ def confirm_and_merge(investor):
     print(f"\n📦 Confirming merge for report_date={report_date}, previous={previous}")
 
     client = storage.Client()
-    bucket = client.bucket(GCS_BUCKET)
+    bucket = client.bucket(g.company_bucket or GCS_BUCKET)
 
     prefixes = ["Schedule_", "CustomerDetails_", "Payments_", "HP_Repayments_"]
     updated_files = []
@@ -318,7 +366,7 @@ def confirm_and_merge(investor):
 
     # Run allocation steps
     try:
-        scripts.output_generators.generate_payments_allocated(report_date=report_date, bucket=GCS_BUCKET, investor=investor)
+        scripts.output_generators.generate_payments_allocated(report_date=report_date, bucket=g.company_bucket or GCS_BUCKET, investor=investor)
         print(f"✅ Payments_Allocated_{report_date}.csv generated")
         flash(f"✅ Payments_Allocated_{report_date}.csv generated")
     except Exception as e:
@@ -326,7 +374,7 @@ def confirm_and_merge(investor):
         flash(f"⚠️ Failed to generate Payments_Allocated: {str(e)}")
 
     try:
-        generate_receivables_allocated(report_date=report_date, bucket=GCS_BUCKET, prior_report_date=previous, investor=investor)
+        generate_receivables_allocated(report_date=report_date, bucket=g.company_bucket or GCS_BUCKET, prior_report_date=previous, investor=investor)
         print(f"✅ Receivables_Allocated_{report_date}.csv generated")
         flash(f"✅ Receivables_Allocated_{report_date}.csv generated")
     except Exception as e:
@@ -343,10 +391,10 @@ def confirm_and_merge(investor):
 
 
 import pandas as pd
-import os
 from scripts.summary_generator import generate_summary_outputs
 
 @app.route('/summary', methods=["GET", "POST"])
+@login_required
 @require_investor
 def summary(investor):
     from scripts.file_tracker import get_reporting_dates
@@ -396,7 +444,7 @@ def summary(investor):
     from google.cloud import storage
     import io
     client = storage.Client()
-    bucket = client.bucket(GCS_BUCKET)
+    bucket = client.bucket(g.company_bucket or GCS_BUCKET)
 
     # === Receivables Allocated ===
     recv_blob = bucket.blob(build_investor_path(investor, "outputs", f"Receivables_Allocated_{report_date}.csv"))
@@ -429,6 +477,7 @@ def summary(investor):
 
 
 @app.route('/finalise-repurchases', methods=["POST"])
+@login_required
 @require_investor
 def finalise_repurchase_overrides(investor):
     import pandas as pd
@@ -453,7 +502,7 @@ def finalise_repurchase_overrides(investor):
         return redirect(url_for("summary", investor=investor))
 
     gcs = storage.Client()
-    bucket = gcs.bucket(GCS_BUCKET)
+    bucket = gcs.bucket(g.company_bucket or GCS_BUCKET)
 
     # Load Receivables_Allocated for the current period
     recv_blob = bucket.blob(build_investor_path(investor, "outputs", f"Receivables_Allocated_{report_date}.csv"))
@@ -497,7 +546,7 @@ def finalise_repurchase_overrides(investor):
     master_blob.upload_from_string(buffer.getvalue(), content_type="text/csv")
 
     # Re-generate Receivables_Allocated using this cumulative file
-    generate_receivables_allocated(report_date=report_date, bucket=GCS_BUCKET, prior_report_date=prior_date, investor=investor)
+    generate_receivables_allocated(report_date=report_date, bucket=g.company_bucket or GCS_BUCKET, prior_report_date=prior_date, investor=investor)
 
     if to_repurchase.empty:
         flash("✅ No new repurchases needed. Prior repurchases were carried forward.")
@@ -507,17 +556,20 @@ def finalise_repurchase_overrides(investor):
 
 
 @app.route("/payment-summary")
+@login_required
 @require_investor
 def payment_summary_route(investor):
-    return payment_summary(GCS_BUCKET, investor)
+    return payment_summary(g.company_bucket or GCS_BUCKET, investor)
 
 
 @app.route("/download-confirmation")
+@login_required
 @require_investor
 def download_confirmation_route(investor):
-    return download_confirmation(GCS_BUCKET, investor)
+    return download_confirmation(g.company_bucket or GCS_BUCKET, investor)
 
 @app.route("/download-and-return")
+@login_required
 @require_investor
 def download_and_return(investor):
     report_date = request.args.get("report_date")
@@ -528,13 +580,15 @@ def download_and_return(investor):
     return render_template("download_and_return.html", report_date=report_date)
 
 @app.route("/download-utilisation")
+@login_required
 @require_investor
 def download_utilisation_route(investor):
-    return generate_utilisation_request(GCS_BUCKET, investor)
+    return generate_utilisation_request(g.company_bucket or GCS_BUCKET, investor)
 
 
 
 @app.route("/download_all_masters")
+@login_required
 @require_investor
 def download_all_masters(investor):
     import io
@@ -548,7 +602,7 @@ def download_all_masters(investor):
         return redirect(url_for("summary", investor=investor))
 
     client = storage.Client()
-    bucket = client.bucket(GCS_BUCKET)
+    bucket = client.bucket(g.company_bucket or GCS_BUCKET)
 
     # 1. List every blob under master/ and filter by date suffix
     blobs = bucket.list_blobs(prefix=f"Investors/{investor}/master/")
@@ -581,6 +635,7 @@ def download_all_masters(investor):
 
 
 @app.route("/download_allocations")
+@login_required
 @require_investor
 def download_allocations(investor):
     import io
@@ -594,7 +649,7 @@ def download_allocations(investor):
         return redirect(url_for("summary", investor=investor))
 
     client = storage.Client()
-    bucket = client.bucket(GCS_BUCKET)
+    bucket = client.bucket(g.company_bucket or GCS_BUCKET)
 
     # find all outputs ending in _{report_date}.csv
     blobs = bucket.list_blobs(prefix=f"Investors/{investor}/outputs/")
@@ -628,6 +683,8 @@ def download_allocations(investor):
 
 
 if __name__ == "__main__":
+    with app.app_context():
+        db.create_all()
     app.run(debug=True)
 
 
